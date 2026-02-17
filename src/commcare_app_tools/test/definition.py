@@ -102,25 +102,44 @@ class TestDefinition:
 
     # --- Replay string generation ---
 
+    @staticmethod
+    def _ensure_indexed_xpath(xpath: str) -> str:
+        """Ensure an XPath reference has a [1] index on the leaf node.
+
+        The CommCare CLI replay mechanism expects indexed references like
+        ``/data/first_name[1]`` rather than ``/data/first_name``.
+        If the xpath already ends with an index (e.g. ``[1]``), it is
+        returned as-is.
+        """
+        import re
+        if re.search(r"\[\d+\]$", xpath):
+            return xpath
+        return f"{xpath}[1]"
+
     def build_replay_string(self) -> str:
         """Convert the answers dict into a :replay session string.
 
         The format expected by XFormPlayer is:
-            ((<xpath>) (VALUE) (<answer>))
-            ((<xpath>) (SKIP))
-            ((<xpath>) (NEW_REPEAT))
+            ((<xpath>[1]) (VALUE) (<answer>))
+            ((<xpath>[1]) (SKIP))
+            ((<xpath>[1]) (NEW_REPEAT))
+
+        Note: XPath references must include a positional index (e.g. ``[1]``)
+        to match the ``TreeReference.toString()`` format used internally by
+        CommCare's ``FormEntrySession``.
 
         Returns:
             The replay session string (without the ':replay ' prefix).
         """
         parts: list[str] = []
         for xpath, value in self.answers.items():
+            indexed = self._ensure_indexed_xpath(xpath)
             if value == ACTION_SKIP:
-                parts.append(f"(({xpath}) (SKIP))")
+                parts.append(f"(({indexed}) (SKIP))")
             elif value == ACTION_NEW_REPEAT:
-                parts.append(f"(({xpath}) (NEW_REPEAT))")
+                parts.append(f"(({indexed}) (NEW_REPEAT))")
             else:
-                parts.append(f"(({xpath}) (VALUE) ({value}))")
+                parts.append(f"(({indexed}) (VALUE) ({value}))")
         return " ".join(parts)
 
     def build_stdin(self) -> str:
@@ -128,7 +147,10 @@ class TestDefinition:
 
         This combines:
         1. Navigation lines (menu/entity selections for ApplicationHost)
-        2. A :replay line with the form answers (for XFormPlayer)
+        2. An empty line to pass the "Form Start" screen
+        3. A :replay line with the form answers (for XFormPlayer)
+        4. Several empty lines to navigate through any remaining prompts
+           (triggers, calculated fields, "Form End") to completion
 
         Returns:
             Multi-line string ready to pipe to the CLI process stdin.
@@ -141,8 +163,15 @@ class TestDefinition:
 
         # Form answers via :replay (consumed by XFormPlayer)
         if self.answers:
+            # Empty line to pass the "Form Start: Press Return to proceed" screen
+            lines.append("")
             replay_string = self.build_replay_string()
             lines.append(f":replay {replay_string}")
+            # Empty lines to navigate through remaining prompts and complete
+            # the form (triggers, calculated fields, "Form End" screen).
+            # Extra lines are harmless -- the CLI ignores input after exit.
+            for _ in range(10):
+                lines.append("")
 
         return "\n".join(lines) + "\n"
 

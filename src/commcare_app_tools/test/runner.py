@@ -348,8 +348,9 @@ class TestRunner:
 
         # Look for XML that starts with <?xml or a root element like <data
         # The form XML is typically printed as a contiguous block.
+        # Use greedy match up to </data> to capture the full form XML.
         xml_pattern = re.compile(
-            r"(<\?xml\s.*?\?>.*?</[^>]+>|<data\s[^>]*>.*?</data>)",
+            r"(<\?xml\s.*?\?>.*</data>|<data\s[^>]*>.*</data>)",
             re.DOTALL,
         )
         match = xml_pattern.search(stdout)

@@ -188,3 +188,11 @@ cd src/commcare_app_tools/web/frontend && npm run dev  # React dev server
 ## License
 
 MIT - see [LICENSE](LICENSE).
+
+## Testing
+
+Run form tests with:
+
+```bash
+cc test run tests/beginner-test.yaml --output-xml result.xml
+```
